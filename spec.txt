@@ -1,0 +1,9 @@
+## 4 relay system controller using micropython for a ESP32.
+- outputs are configured in the main.py (OUT_PIN_X = Y)
+- it contains a small http server in port 11337 with 3 simple endpoints: GET '/' (webpage) POST '/mode' GET '/status' mode allows to post a string for the status set, and get shows the current. 
+- the '/' webpage is a very simple html page with a text field and 2 buttons and every 1 second it gets '/status' to show it in the text field and touching the buttons set the state, button 1 is 'bypass' button 2 is 'override'. 
+- 'bypass' status is all relay outputs in 0
+- 'override' is a final status of all outputs in 1 
+- if changing status it's always a dance, from bypass to override first out 1 and 2 set to 1, wait 200ms and then outputs 3 and 4 set to 1
+- if changing from override to bypass first set 3 and 4 to 0 wait 200ms and then set 1 and 2 to 0.
+By default it boots in bypass.

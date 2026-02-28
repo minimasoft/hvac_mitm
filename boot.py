@@ -1,5 +1,3 @@
-import ugit
-
-ugit.wificonnect()
-ugit.safe_pull_all()
+# boot.py - System initialization on boot
+import main
 
