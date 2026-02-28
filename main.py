@@ -1,8 +1,8 @@
 # Pin definitions for relay outputs
-OUT_PIN_1 = 23
-OUT_PIN_2 = 22
-OUT_PIN_3 = 21
-OUT_PIN_4 = 19
+OUT_PIN_1 = 12
+OUT_PIN_2 = 13
+OUT_PIN_3 = 14
+OUT_PIN_4 = 15
 
 import machine
 from time import sleep
@@ -37,23 +37,27 @@ def set_all_relays(values):
 def bypass_to_override():
     """Transition from bypass to override: first outputs 1 and 2, then 3 and 4"""
     # Step 1: Set outputs 1 and 2 to 1
+    print("to override")
     set_relay(0, 1)
     set_relay(1, 1)
     sleep(0.2)  # Wait 200ms
     # Step 2: Set outputs 3 and 4 to 1
     set_relay(2, 1)
     set_relay(3, 1)
+    print("in override")
 
 
 def override_to_bypass():
     """Transition from override to bypass: first outputs 3 and 4, then 1 and 2"""
     # Step 1: Set outputs 3 and 4 to 0
+    print("to bypass")
     set_relay(2, 0)
     set_relay(3, 0)
     sleep(0.2)  # Wait 200ms
     # Step 2: Set outputs 1 and 2 to 0
     set_relay(0, 0)
     set_relay(1, 0)
+    print("in bypass")
 
 
 def set_mode(mode):
