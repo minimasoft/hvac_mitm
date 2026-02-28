@@ -7,3 +7,9 @@
 - if changing status it's always a dance, from bypass to override first out 1 and 2 set to 1, wait 200ms and then outputs 3 and 4 set to 1
 - if changing from override to bypass first set 3 and 4 to 0 wait 200ms and then set 1 and 2 to 0.
 By default it boots in bypass.
+
+## v2 wifi
+On boot and every 5 minutes if connection is lost it should connect to wifi.
+- SSID is in file '.ssid' mandatory
+- PSK is in file '.psk' optional (open net)
+if the .ssid file is missing it just prints a log and do nothing
