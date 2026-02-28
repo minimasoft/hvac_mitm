@@ -1,6 +1,5 @@
 # boot.py - System initialization on boot
 import network
-import os
 import time
 import _thread
 
@@ -9,17 +8,19 @@ WIFI_RETRY_INTERVAL_MS = 300000  # 5 minutes
 
 def connect_wifi():
     """Attempt to connect to WiFi using credentials from files."""
-    if not os.path.exists('.ssid'):
+    try:
+        with open('.ssid', 'r') as f:
+            ssid = f.read().strip()
+    except OSError:
         print("WiFi: .ssid file not found, skipping WiFi connection")
         return None
 
-    with open('.ssid', 'r') as f:
-        ssid = f.read().strip()
-
     psk = None
-    if os.path.exists('.psk'):
+    try:
         with open('.psk', 'r') as f:
             psk = f.read().strip()
+    except OSError:
+        pass
 
     print(f"WiFi: Connecting to {ssid}...")
 
