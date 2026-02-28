@@ -144,7 +144,7 @@ def http_server():
         conn, client_addr = sock.accept()
         try:
             request = conn.recv(1024)
-            request_str = request.decode('utf-8', errors='ignore')
+            request_str = request.decode('utf-8')
             
             # Parse the request
             lines = request_str.split('\r\n')
