@@ -7,6 +7,7 @@ OUT_PIN_4 = 15
 import machine
 from time import sleep, time
 import socket
+import _thread
 
 # Configure relay pins as output
 relay_pins = [
@@ -37,6 +38,12 @@ POWER_LEVELS = {
 
 # Relay dance delay in seconds
 RELAY_DANCE_DELAY = 0.2
+
+# Auto-power-save timer constants
+TIMER_INTERVAL_SEC = 60
+TIMER_THRESHOLD_HOURS = 8
+
+_last_mode_change = time()
 
 current_mode = MODE_BYPASS
 
@@ -122,12 +129,29 @@ def set_mode(mode):
         set_pwm(MODE_30)
 
     current_mode = mode
+    _last_mode_change = time()
 
 
 def get_status():
     """Get the current status string"""
     global current_mode
     return current_mode
+
+
+def auto_power_save_timer():
+    """Background thread: check every 60s if at 50%/70% for 8+ hours, auto-drop to 30%"""
+    while True:
+        try:
+            sleep(TIMER_INTERVAL_SEC)
+            if current_mode in (MODE_50, MODE_70):
+                elapsed = time() - _last_mode_change
+                threshold = TIMER_THRESHOLD_HOURS * 3600
+                if elapsed >= threshold:
+                    print(f"Auto-power-save: {current_mode} for {elapsed:.0f}s, dropping to 30%")
+                    set_mode(MODE_30)
+        except Exception as e:
+            print(f"Timer error: {e}")
+            sleep(TIMER_INTERVAL_SEC)
 
 
 # HTML page for root endpoint
@@ -270,6 +294,16 @@ def init_bypass():
     set_pwm(MODE_BYPASS)
 
 
+def start_timer():
+    """Start the auto-power-save background timer thread"""
+    try:
+        _thread.start_new_thread(auto_power_save_timer, ())
+        print("Auto-power-save timer started")
+    except Exception as e:
+        print(f"Failed to start timer: {e}")
+
+
 # Initialize and run
 init_bypass()
+start_timer()
 http_server()
