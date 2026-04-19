@@ -44,6 +44,7 @@ TIMER_INTERVAL_SEC = 60
 TIMER_THRESHOLD_HOURS = 8
 
 _last_mode_change = time()
+_mode_lock = _thread.allocate_lock()
 
 current_mode = MODE_BYPASS
 
@@ -103,39 +104,42 @@ def set_pwm(level):
 def set_mode(mode):
     """Set the system mode with proper transition dance"""
     global current_mode
+    global _last_mode_change
 
     if mode == current_mode:
         return
 
-    is_auto_save = current_mode == MODE_AUTO_SAVE
-    is_current_powered = is_auto_save or powered_level(current_mode) is not None
-    is_new_powered = powered_level(mode) is not None
+    with _mode_lock:
+        is_auto_save = current_mode == MODE_AUTO_SAVE
+        is_current_powered = is_auto_save or powered_level(current_mode) is not None
+        is_new_powered = powered_level(mode) is not None
 
-    if mode == MODE_BYPASS and is_current_powered:
-        # Powered → bypass: dance then stop PWM
-        powered_to_bypass()
-        set_pwm(MODE_BYPASS)
-    elif is_new_powered and current_mode == MODE_BYPASS:
-        # Bypass → powered: dance then set PWM
-        bypass_to_powered()
-        set_pwm(mode)
-    elif is_current_powered and is_new_powered:
-        # Powered → powered: only change PWM
-        set_pwm(mode)
-    elif mode == MODE_AUTO_SAVE:
-        # auto-power-save behaves like 30% for relay/PWM
-        if current_mode == MODE_BYPASS:
+        if mode == MODE_BYPASS and is_current_powered:
+            # Powered → bypass: dance then stop PWM
+            powered_to_bypass()
+            set_pwm(MODE_BYPASS)
+        elif is_new_powered and current_mode == MODE_BYPASS:
+            # Bypass → powered: dance then set PWM
             bypass_to_powered()
-        set_pwm(MODE_30)
+            set_pwm(mode)
+        elif is_current_powered and is_new_powered:
+            # Powered → powered: only change PWM
+            set_pwm(mode)
+        elif mode == MODE_AUTO_SAVE:
+            # auto-power-save behaves like 30% for relay/PWM
+            if current_mode == MODE_BYPASS:
+                bypass_to_powered()
+            set_pwm(MODE_30)
 
-    current_mode = mode
-    _last_mode_change = time()
+        current_mode = mode
+        _last_mode_change = time()
 
 
 def get_status():
     """Get the current status string"""
     global current_mode
-    return current_mode
+    with _mode_lock:
+        return current_mode
 
 
 def auto_power_save_timer():
@@ -143,12 +147,13 @@ def auto_power_save_timer():
     while True:
         try:
             sleep(TIMER_INTERVAL_SEC)
-            if current_mode in (MODE_50, MODE_70):
-                elapsed = time() - _last_mode_change
-                threshold = TIMER_THRESHOLD_HOURS * 3600
-                if elapsed >= threshold:
-                    print(f"Auto-power-save: {current_mode} for {elapsed:.0f}s, dropping to 30%")
-                    set_mode(MODE_30)
+            with _mode_lock:
+                if current_mode in (MODE_50, MODE_70):
+                    elapsed = time() - _last_mode_change
+                    threshold = TIMER_THRESHOLD_HOURS * 3600
+                    if elapsed >= threshold:
+                        print(f"Auto-power-save: {current_mode} for {elapsed:.0f}s, dropping to 30%")
+                        set_mode(MODE_30)
         except Exception as e:
             print(f"Timer error: {e}")
             sleep(TIMER_INTERVAL_SEC)
