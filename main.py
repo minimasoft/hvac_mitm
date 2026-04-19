@@ -247,6 +247,7 @@ def http_server():
 
     while True:
         conn, client_addr = sock.accept()
+        conn.settimeout(5.0)
         try:
             request = conn.recv(1024)
             request_str = request.decode('utf-8')
