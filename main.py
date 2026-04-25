@@ -43,8 +43,12 @@ RELAY_DANCE_DELAY = 0.2
 TIMER_INTERVAL_SEC = 60
 TIMER_THRESHOLD_HOURS = 8
 
+# Auto-restart timer constants
+TIMER_INTERVAL_24H = 86400  # 24 hours in seconds
+
 _last_mode_change = time()
 _mode_lock = _thread.allocate_lock()
+_relay_dance_in_progress = False
 
 current_mode = MODE_BYPASS
 
@@ -62,6 +66,8 @@ def set_all_relays(values):
 
 def bypass_to_powered():
     """Transition from bypass to any powered mode: first outputs 1 and 2, then 3 and 4"""
+    global _relay_dance_in_progress
+    _relay_dance_in_progress = True
     print("to powered")
     # Step 1: Set outputs 1 and 2 to 1
     set_relay(0, 1)
@@ -71,10 +77,13 @@ def bypass_to_powered():
     set_relay(2, 1)
     set_relay(3, 1)
     print("in powered")
+    _relay_dance_in_progress = False
 
 
 def powered_to_bypass():
     """Transition from any powered mode to bypass: first outputs 3 and 4, then 1 and 2"""
+    global _relay_dance_in_progress
+    _relay_dance_in_progress = True
     print("to bypass")
     # Step 1: Set outputs 3 and 4 to 0
     set_relay(2, 0)
@@ -84,6 +93,7 @@ def powered_to_bypass():
     set_relay(0, 0)
     set_relay(1, 0)
     print("in bypass")
+    _relay_dance_in_progress = False
 
 
 def powered_level(mode):
@@ -156,6 +166,22 @@ def auto_power_save_timer():
                         set_mode(MODE_30)
         except Exception as e:
             print(f"Timer error: {e}")
+            sleep(TIMER_INTERVAL_SEC)
+
+
+def auto_restart_timer():
+    """Background thread: reboot every 24h if in bypass and not mid-dance"""
+    while True:
+        try:
+            sleep(TIMER_INTERVAL_SEC)
+            with _mode_lock:
+                if (get_status() == MODE_BYPASS
+                        and not _relay_dance_in_progress
+                        and time() >= TIMER_INTERVAL_24H):
+                    print(f"Auto-restart: {int(time())}s since boot, rebooting")
+                    machine.reset()
+        except Exception as e:
+            print(f"Restart timer error: {e}")
             sleep(TIMER_INTERVAL_SEC)
 
 
@@ -309,7 +335,17 @@ def start_timer():
         print(f"Failed to start timer: {e}")
 
 
+def start_auto_restart():
+    """Start the auto-restart background timer thread"""
+    try:
+        _thread.start_new_thread(auto_restart_timer, ())
+        print("Auto-restart timer started")
+    except Exception as e:
+        print(f"Failed to start auto-restart timer: {e}")
+
+
 # Initialize and run
 init_bypass()
 start_timer()
+start_auto_restart()
 http_server()
