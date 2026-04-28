@@ -17,8 +17,21 @@ relay_pins = [
     machine.Pin(OUT_PIN_4, machine.Pin.OUT),
 ]
 
-# PWM motor controller on GPIO 5
-pwm_motor = machine.PWM(machine.Pin(5), freq=1000, duty_u16=0)
+# BTS7960 IBT-2 H-bridge motor controller pins
+RPWM_PIN = 21  # Forward PWM
+LPWM_PIN = 17  # Reverse PWM (held 0 for forward-only)
+R_EN_PIN = 18  # Right enable (held high)
+L_EN_PIN = 16  # Left enable (held high)
+
+# BTS7960 PWM channels
+pwm_rpwm = machine.PWM(machine.Pin(RPWM_PIN), freq=1000, duty_u16=0)
+pwm_lpw = machine.PWM(machine.Pin(LPWM_PIN), freq=1000, duty_u16=0)
+
+# BTS7960 enable pins (held high for forward-only operation)
+en_r = machine.Pin(R_EN_PIN, machine.Pin.OUT)
+en_l = machine.Pin(L_EN_PIN, machine.Pin.OUT)
+en_r.value(1)
+en_l.value(1)
 
 # Status modes
 MODE_BYPASS = "bypass"
@@ -104,11 +117,15 @@ def powered_level(mode):
 
 
 def set_pwm(level):
-    """Set PWM duty cycle based on power level string"""
+    """Set BTS7960 differential PWM: RPWM at duty cycle, LPWM at 0"""
     if level in POWER_LEVELS:
-        pwm_motor.duty_u16(POWER_LEVELS[level])
+        duty = POWER_LEVELS[level]
+        pwm_rpwm.duty_u16(duty)
+        pwm_lpw.duty_u16(0)
     else:
-        pwm_motor.duty_u16(0)
+        # Bypass or auto-power-save (treated as 30% relay-wise, but PWM 0)
+        pwm_rpwm.duty_u16(0)
+        pwm_lpw.duty_u16(0)
 
 
 def set_mode(mode):
@@ -271,53 +288,60 @@ def http_server():
 
     print("HTTP server listening on port 11337")
 
-    while True:
-        conn, client_addr = sock.accept()
-        conn.settimeout(5.0)
-        try:
-            request = conn.recv(1024)
-            request_str = request.decode('utf-8')
+    try:
+        while True:
+            conn, client_addr = sock.accept()
+            conn.settimeout(5.0)
+            try:
+                request = conn.recv(1024)
+                request_str = request.decode('utf-8')
 
-            # Parse the request
-            lines = request_str.split('\r\n')
-            if not lines:
-                conn.close()
-                continue
+                # Parse the request
+                lines = request_str.split('\r\n')
+                if not lines:
+                    conn.close()
+                    continue
 
-            method, path, *_ = lines[0].split(' ')
+                method, path, *_ = lines[0].split(' ')
+                print(f"[{method} {path}]")
 
-            if path == '/' and method == 'GET':
-                # Serve the HTML page
-                response = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}".format(len(HTML_PAGE), HTML_PAGE)
-                conn.send(response.encode('utf-8'))
+                if path == '/' and method == 'GET':
+                    # Serve the HTML page
+                    response = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}".format(len(HTML_PAGE), HTML_PAGE)
+                    conn.send(response.encode('utf-8'))
 
-            elif path == '/mode' and method == 'POST':
-                # Handle mode change
-                body = request_str.split('\r\n\r\n', 1)[1] if '\r\n\r\n' in request_str else ''
-                mode = body.strip() if body else ''
+                elif path == '/mode' and method == 'POST':
+                    # Handle mode change
+                    body = request_str.split('\r\n\r\n', 1)[1] if '\r\n\r\n' in request_str else ''
+                    mode = body.strip() if body else ''
 
-                if mode in VALID_MODES:
-                    set_mode(mode)
-                    response = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 2\r\nConnection: close\r\n\r\nOK"
+                    if mode in VALID_MODES:
+                        set_mode(mode)
+                        print(f"[POST /mode -> {mode}]")
+                        response = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 2\r\nConnection: close\r\n\r\nOK"
+                    else:
+                        print(f"[POST /mode -> invalid: {mode}]")
+                        response = "HTTP/1.1 400 Bad Request\r\nContent-Type: text/plain\r\nContent-Length: 11\r\nConnection: close\r\n\r\nInvalid mode"
+                    conn.send(response.encode('utf-8'))
+
+                elif path == '/status' and method == 'GET':
+                    # Return current status
+                    status = get_status()
+                    response = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}".format(len(status), status)
+                    conn.send(response.encode('utf-8'))
+
                 else:
-                    response = "HTTP/1.1 400 Bad Request\r\nContent-Type: text/plain\r\nContent-Length: 11\r\nConnection: close\r\n\r\nInvalid mode"
-                conn.send(response.encode('utf-8'))
+                    # Not found
+                    print(f"[{method} {path} -> 404]")
+                    response = "HTTP/1.1 404 Not Found\r\nContent-Type: text/plain\r\nContent-Length: 9\r\nConnection: close\r\n\r\nNot Found"
+                    conn.send(response.encode('utf-8'))
 
-            elif path == '/status' and method == 'GET':
-                # Return current status
-                status = get_status()
-                response = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}".format(len(status), status)
-                conn.send(response.encode('utf-8'))
-
-            else:
-                # Not found
-                response = "HTTP/1.1 404 Not Found\r\nContent-Type: text/plain\r\nContent-Length: 9\r\nConnection: close\r\n\r\nNot Found"
-                conn.send(response.encode('utf-8'))
-
-        except Exception as e:
-            print("Error:", e)
-        finally:
-            conn.close()
+            except Exception as e:
+                print(f"[error: {e}]")
+            finally:
+                conn.close()
+    except KeyboardInterrupt:
+        print("Server stopped")
 
 
 def init_bypass():
