@@ -325,54 +325,76 @@ def http_server():
             conn, client_addr = sock.accept()
             conn.settimeout(5.0)
             try:
-                request = recv_loop(conn)
-                request_str = request.decode('utf-8')
+                while True:
+                    request = recv_loop(conn)
 
-                # Parse the request
-                lines = request_str.split('\r\n')
-                if not lines:
-                    conn.close()
-                    continue
+                    # Empty recv → client disconnected, exit keep-alive loop
+                    if not request:
+                        break
 
-                # Guard against malformed request lines (need at least method + path)
-                if len(lines) == 0 or len(lines[0].split(' ')) < 2:
-                    response = response_400("Bad request line")
-                    conn.send(response.encode('utf-8'))
-                    continue
+                    request_str = request.decode('utf-8')
 
-                method, path, *_ = lines[0].split(' ')
-                print(f"[{method} {path}]")
+                    # Parse the request
+                    lines = request_str.split('\r\n')
+                    if not lines:
+                        conn.close()
+                        break
 
-                if path == '/' and method == 'GET':
-                    # Serve the HTML page
-                    response = response_200(HTML_PAGE, 'text/html')
-                    conn.send(response.encode('utf-8'))
+                    # Guard against malformed request lines (need at least method + path)
+                    if len(lines) == 0 or len(lines[0].split(' ')) < 2:
+                        response = response_400("Bad request line", 'close')
+                        conn.send(response.encode('utf-8'))
+                        continue
 
-                elif path == '/mode' and method == 'POST':
-                    # Handle mode change
-                    body = request_str.split('\r\n\r\n', 1)[1] if '\r\n\r\n' in request_str else ''
-                    mode = body.strip() if body else ''
+                    method, path, *_ = lines[0].split(' ')
+                    print(f"[{method} {path}]")
 
-                    if mode in VALID_MODES:
-                        set_mode(mode)
-                        print(f"[POST /mode -> {mode}]")
-                        response = response_200("OK")
+                    # Determine connection_mode for this request
+                    # Default: 'close' for HTTP/1.0 or missing version
+                    version = lines[0].split(' ')[2] if len(lines[0].split(' ')) >= 3 else 'HTTP/1.0'
+                    connection_mode = 'close'
+                    if version.startswith('HTTP/1.1'):
+                        connection_mode = 'keep-alive'
+                        for header_line in lines[1:]:
+                            if header_line.lower().startswith('connection:'):
+                                conn_val = header_line.split(':', 1)[1].strip().lower()
+                                if conn_val == 'close':
+                                    connection_mode = 'close'
+                                    break
+
+                    if path == '/' and method == 'GET':
+                        # Serve the HTML page
+                        response = response_200(HTML_PAGE, 'text/html', connection_mode)
+                        conn.send(response.encode('utf-8'))
+
+                    elif path == '/mode' and method == 'POST':
+                        # Handle mode change
+                        body = request_str.split('\r\n\r\n', 1)[1] if '\r\n\r\n' in request_str else ''
+                        mode = body.strip() if body else ''
+
+                        if mode in VALID_MODES:
+                            set_mode(mode)
+                            print(f"[POST /mode -> {mode}]")
+                            response = response_200("OK", connection_mode)
+                        else:
+                            print(f"[POST /mode -> invalid: {mode}]")
+                            response = response_400("Invalid mode: {}".format(mode), connection_mode)
+                        conn.send(response.encode('utf-8'))
+
+                    elif path == '/status' and method == 'GET':
+                        # Return current status
+                        status = get_status()
+                        response = response_200(status, connection_mode)
+                        conn.send(response.encode('utf-8'))
+
                     else:
-                        print(f"[POST /mode -> invalid: {mode}]")
-                        response = response_400("Invalid mode: {}".format(mode))
-                    conn.send(response.encode('utf-8'))
+                        # Not found
+                        print(f"[{method} {path} -> 404]")
+                        response = response_404("Not Found", connection_mode)
+                        conn.send(response.encode('utf-8'))
 
-                elif path == '/status' and method == 'GET':
-                    # Return current status
-                    status = get_status()
-                    response = response_200(status)
-                    conn.send(response.encode('utf-8'))
-
-                else:
-                    # Not found
-                    print(f"[{method} {path} -> 404]")
-                    response = response_404("Not Found")
-                    conn.send(response.encode('utf-8'))
+                    if connection_mode == 'close':
+                        break
 
             except Exception as e:
                 print(f"[error: {e}]")
