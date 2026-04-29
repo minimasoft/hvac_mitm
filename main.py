@@ -266,7 +266,7 @@ HTML_PAGE = """<!DOCTYPE html>
             .catch(err => console.error('Error:', err));
         }
 
-        setInterval(updateStatus, 1000);
+        setInterval(updateStatus, 2222);
         updateStatus();
 
         document.getElementById('btn-bypass').onclick = () => setMode('bypass');
@@ -323,7 +323,7 @@ def http_server():
     try:
         while True:
             conn, client_addr = sock.accept()
-            conn.settimeout(5.0)
+            conn.settimeout(3.0)
             try:
                 while True:
                     request = recv_loop(conn)
