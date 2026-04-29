@@ -279,21 +279,21 @@ HTML_PAGE = """<!DOCTYPE html>
 </html>"""
 
 
-def response_200(body, content_type='text/plain'):
+def response_200(body, content_type='text/plain', connection_mode='close'):
     """Build a 200 OK response with security headers."""
-    headers = "HTTP/1.1 200 OK\r\nContent-Type: {}\r\nCache-Control: no-cache, no-store\r\nX-Content-Type-Options: nosniff\r\nContent-Length: {}\r\nConnection: close\r\n\r\n".format(content_type, len(body.encode('utf-8')))
+    headers = "HTTP/1.1 200 OK\r\nContent-Type: {}\r\nCache-Control: no-cache, no-store\r\nX-Content-Type-Options: nosniff\r\nContent-Length: {}\r\nConnection: {}\r\n\r\n".format(content_type, len(body.encode('utf-8')), connection_mode)
     return headers + body
 
 
-def response_400(body):
+def response_400(body, connection_mode='close'):
     """Build a 400 Bad Request response with security headers."""
-    headers = "HTTP/1.1 400 Bad Request\r\nContent-Type: text/plain\r\nCache-Control: no-cache, no-store\r\nX-Content-Type-Options: nosniff\r\nContent-Length: {}\r\nConnection: close\r\n\r\n".format(len(body.encode('utf-8')))
+    headers = "HTTP/1.1 400 Bad Request\r\nContent-Type: text/plain\r\nCache-Control: no-cache, no-store\r\nX-Content-Type-Options: nosniff\r\nContent-Length: {}\r\nConnection: {}\r\n\r\n".format(len(body.encode('utf-8')), connection_mode)
     return headers + body
 
 
-def response_404(body):
+def response_404(body, connection_mode='close'):
     """Build a 404 Not Found response with security headers."""
-    headers = "HTTP/1.1 404 Not Found\r\nContent-Type: text/plain\r\nCache-Control: no-cache, no-store\r\nX-Content-Type-Options: nosniff\r\nContent-Length: {}\r\nConnection: close\r\n\r\n".format(len(body.encode('utf-8')))
+    headers = "HTTP/1.1 404 Not Found\r\nContent-Type: text/plain\r\nCache-Control: no-cache, no-store\r\nX-Content-Type-Options: nosniff\r\nContent-Length: {}\r\nConnection: {}\r\n\r\n".format(len(body.encode('utf-8')), connection_mode)
     return headers + body
 
 
