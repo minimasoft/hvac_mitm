@@ -279,6 +279,24 @@ HTML_PAGE = """<!DOCTYPE html>
 </html>"""
 
 
+def response_200(body, content_type='text/plain'):
+    """Build a 200 OK response with security headers."""
+    headers = "HTTP/1.1 200 OK\r\nContent-Type: {}\r\nCache-Control: no-cache, no-store\r\nX-Content-Type-Options: nosniff\r\nContent-Length: {}\r\nConnection: close\r\n\r\n".format(content_type, len(body.encode('utf-8')))
+    return headers + body
+
+
+def response_400(body):
+    """Build a 400 Bad Request response with security headers."""
+    headers = "HTTP/1.1 400 Bad Request\r\nContent-Type: text/plain\r\nCache-Control: no-cache, no-store\r\nX-Content-Type-Options: nosniff\r\nContent-Length: {}\r\nConnection: close\r\n\r\n".format(len(body.encode('utf-8')))
+    return headers + body
+
+
+def response_404(body):
+    """Build a 404 Not Found response with security headers."""
+    headers = "HTTP/1.1 404 Not Found\r\nContent-Type: text/plain\r\nCache-Control: no-cache, no-store\r\nX-Content-Type-Options: nosniff\r\nContent-Length: {}\r\nConnection: close\r\n\r\n".format(len(body.encode('utf-8')))
+    return headers + body
+
+
 def recv_loop(conn):
     """Read from socket until \\r\\n\\r\\n is found, handling fragmented TCP packets."""
     buf = bytearray()
@@ -316,12 +334,18 @@ def http_server():
                     conn.close()
                     continue
 
+                # Guard against malformed request lines (need at least method + path)
+                if len(lines) == 0 or len(lines[0].split(' ')) < 2:
+                    response = response_400("Bad request line")
+                    conn.send(response.encode('utf-8'))
+                    continue
+
                 method, path, *_ = lines[0].split(' ')
                 print(f"[{method} {path}]")
 
                 if path == '/' and method == 'GET':
                     # Serve the HTML page
-                    response = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}".format(len(HTML_PAGE), HTML_PAGE)
+                    response = response_200(HTML_PAGE, 'text/html')
                     conn.send(response.encode('utf-8'))
 
                 elif path == '/mode' and method == 'POST':
@@ -332,22 +356,22 @@ def http_server():
                     if mode in VALID_MODES:
                         set_mode(mode)
                         print(f"[POST /mode -> {mode}]")
-                        response = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 2\r\nConnection: close\r\n\r\nOK"
+                        response = response_200("OK")
                     else:
                         print(f"[POST /mode -> invalid: {mode}]")
-                        response = "HTTP/1.1 400 Bad Request\r\nContent-Type: text/plain\r\nContent-Length: 11\r\nConnection: close\r\n\r\nInvalid mode"
+                        response = response_400("Invalid mode: {}".format(mode))
                     conn.send(response.encode('utf-8'))
 
                 elif path == '/status' and method == 'GET':
                     # Return current status
                     status = get_status()
-                    response = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}".format(len(status), status)
+                    response = response_200(status)
                     conn.send(response.encode('utf-8'))
 
                 else:
                     # Not found
                     print(f"[{method} {path} -> 404]")
-                    response = "HTTP/1.1 404 Not Found\r\nContent-Type: text/plain\r\nContent-Length: 9\r\nConnection: close\r\n\r\nNot Found"
+                    response = response_404("Not Found")
                     conn.send(response.encode('utf-8'))
 
             except Exception as e:
