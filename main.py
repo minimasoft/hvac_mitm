@@ -279,6 +279,20 @@ HTML_PAGE = """<!DOCTYPE html>
 </html>"""
 
 
+def recv_loop(conn):
+    """Read from socket until \\r\\n\\r\\n is found, handling fragmented TCP packets."""
+    buf = bytearray()
+    while b'\r\n\r\n' not in buf:
+        try:
+            data = conn.recv(2048)
+            if not data:
+                break
+            buf.extend(data)
+        except OSError:
+            break
+    return bytes(buf)
+
+
 def http_server():
     """Start the HTTP server on port 11337"""
     addr = socket.getaddrinfo('0.0.0.0', 11337)[0][-1]
@@ -291,9 +305,9 @@ def http_server():
     try:
         while True:
             conn, client_addr = sock.accept()
-            conn.settimeout(1.5)
+            conn.settimeout(5.0)
             try:
-                request = conn.recv(2048)
+                request = recv_loop(conn)
                 request_str = request.decode('utf-8')
 
                 # Parse the request
@@ -342,6 +356,8 @@ def http_server():
                 conn.close()
     except KeyboardInterrupt:
         print("Server stopped")
+    except Exception as e:
+        print(f"[error: {e}]")
 
 
 def init_bypass():
