@@ -40,11 +40,19 @@ extern const char* VALID_MODES[5];
 #define RELAY_DANCE_DELAY_MS  200
 
 // ============================================================
+// Auto Power-Save / Auto-Restart Timer Thresholds
+// ============================================================
+
+#define AUTO_POWER_SAVE_THRESHOLD_MS  28800000UL  // 8 hours
+#define AUTO_RESTART_THRESHOLD_MS    86400000UL  // 24 hours
+
+// ============================================================
 // Global State
 // ============================================================
 
 extern const char* current_mode;
 extern unsigned long last_mode_change_ms;
+extern unsigned long boot_ms;
 
 // ============================================================
 // Function Declarations
@@ -61,5 +69,12 @@ void powered_to_bypass();
 
 void set_relay(int index, int value);
 void set_all_relays(int v0, int v1, int v2, int v3);
+
+// ============================================================
+// Timer Handlers (called from main.cpp loop())
+// ============================================================
+
+void handle_auto_power_save();
+void handle_auto_restart();
 
 #endif // MOTOR_CONTROLLER_H
