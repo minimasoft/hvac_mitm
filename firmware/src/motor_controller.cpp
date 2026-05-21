@@ -18,6 +18,7 @@ const char* VALID_MODES[5] = {
 // ============================================================
 const char* current_mode = MODE_BYPASS;
 unsigned long last_mode_change_ms = 0;
+unsigned long boot_ms = 0;
 
 // ============================================================
 // GPIO Helpers
@@ -162,4 +163,41 @@ void init_bypass() {
 
     current_mode = MODE_BYPASS;
     last_mode_change_ms = millis();
+}
+
+// ============================================================
+// Auto Power-Save Timer
+// ============================================================
+
+void handle_auto_power_save() {
+    // Only trigger from 50% or 70% modes
+    if (current_mode != MODE_50 && current_mode != MODE_70) {
+        return;
+    }
+
+    unsigned long elapsed = millis() - last_mode_change_ms;
+    if (elapsed >= AUTO_POWER_SAVE_THRESHOLD_MS) {
+        unsigned long seconds = elapsed / 1000UL;
+        Serial.printf("Auto-power-save: %s for %lus, dropping to 30%%\n",
+                      current_mode, seconds);
+        set_mode(MODE_30);
+    }
+}
+
+// ============================================================
+// Auto-Restart Timer
+// ============================================================
+
+void handle_auto_restart() {
+    if (current_mode != MODE_BYPASS) {
+        return;
+    }
+
+    unsigned long uptime = millis() - boot_ms;
+    if (uptime >= AUTO_RESTART_THRESHOLD_MS) {
+        unsigned long seconds = uptime / 1000UL;
+        Serial.printf("Auto-restart: %lus since boot, rebooting\n", seconds);
+        delay(100);  // flush serial
+        ESP.restart();
+    }
 }

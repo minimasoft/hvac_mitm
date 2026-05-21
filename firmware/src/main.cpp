@@ -288,6 +288,7 @@ void init_http_server() {
 void setup() {
     Serial.begin(115200);
     delay(100);
+    boot_ms = millis();
     init_bypass();
     init_wifi();
     init_http_server();
@@ -299,5 +300,7 @@ void setup() {
 // ============================================================
 void loop() {
     handle_wifi();
+    handle_auto_power_save();
+    handle_auto_restart();
     server.handleClient();
 }
